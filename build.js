@@ -41,7 +41,21 @@ ${style}
 <body>
 ${body}
 <script>
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}
+/* 開くたび・戻るたびに新しい版を確認し、届いたら「更新」ボタンを出す */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(function(reg){
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')reg.update().catch(function(){});});
+  }).catch(function(){});
+  var hadController=!!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(!hadController){hadController=true;return;}
+    if(document.getElementById('updateBar'))return;
+    var bar=document.createElement('div');bar.id='updateBar';bar.className='update-bar';bar.setAttribute('role','status');
+    bar.innerHTML='<span>新しい版があります</span><button type="button">更新</button>';
+    bar.querySelector('button').addEventListener('click',function(){location.reload();});
+    document.body.appendChild(bar);
+  });
+}
 </script>
 </body>
 </html>
