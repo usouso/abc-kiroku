@@ -146,7 +146,7 @@ details.card[open] summary::after{content:"−"}
 .steps{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .steps code{font-family:inherit;background:var(--chip);padding:1px 6px;border-radius:6px;font-weight:600}
 .note.warn{color:var(--danger);font-weight:600}
-.field.flash textarea{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);transition:box-shadow .3s}
+.field.flash .btn{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);transition:box-shadow .3s}
 .ai-out{overflow-wrap:anywhere;font-size:14.5px;line-height:1.7;background:var(--bg);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .ai-out h4{margin:8px 0 0;font-size:14px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px}
 .ai-out h4:first-child{margin-top:0}
@@ -595,7 +595,7 @@ function resumeFromShortcut(){
     var f=document.getElementById('aiResultField');if(!f)return;
     f.scrollIntoView({block:'center'});
     f.classList.add('flash');setTimeout(function(){f.classList.remove('flash');},2400);
-    toast('まとめができたら「貼り付け」を押してください');
+    toast('「まとめを取り込んで保存」を押してください');
   },120);
 }
 document.addEventListener('visibilitychange',resumeFromShortcut);
@@ -619,13 +619,13 @@ function renderAI(recs){
   h+='<li>アクション <code>クリップボードを取得</code> を追加します。</li>';
   h+='<li>アクション <code>モデルを使用</code> を追加し、モデルを <code>デバイス上</code> にします。依頼の欄には、ひとつ前の「クリップボード」を入れます。</li>';
   h+='<li>アクション <code>クリップボードにコピー</code> を追加し、「応答」をコピーするようにします。</li>';
-  h+='<li>まとめはクリップボードに入ります。このアプリに戻ると下の欄に移動するので、「貼り付け」→「まとめを保存」を押します。</li>';
+  h+='<li>まとめはクリップボードに入ります。このアプリに戻ると「まとめを取り込んで保存」に移動するので、押して「ペースト」を選びます。</li>';
   h+='</ol><p class="note">アクションの名前は iOS のバージョンで少し違うことがあります。「デバイス上」を選べば、文章は iPhone の外に出ません。</p></details>';
-  h+='<div class="field" id="aiResultField"><label for="aiResult">AIのまとめを貼り付けて保存</label><textarea id="aiResult" data-bind="aiResult" rows="4" placeholder="「貼り付け」を押すか、ここを長押しして「ペースト」">'+esc(ui.aiResult)+'</textarea></div>';
+  h+='<div class="field" id="aiResultField"><button type="button" class="btn primary" data-act="pasteResult" style="min-height:52px;font-size:16px">まとめを取り込んで保存</button><p class="note">AIのまとめをコピーした状態で押してください。iPhoneが「ペースト」を確認するので、それを押すと保存されます。</p></div>';
   h+='<p class="note warn" id="aiWarn"'+(isPrompt(ui.aiResult)?'':' hidden')+'>これはAIに渡した文章で、まとめではありません。ショートカットの最後に「クリップボードにコピー」(応答をコピー)があるか確認してください。</p>';
-  h+='<div class="row"><button type="button" class="btn primary" data-act="pasteResult">貼り付け</button><button type="button" class="btn" data-act="saveNote"'+(canSaveResult()?'':' disabled')+' id="saveNoteBtn">まとめを保存</button></div>';
+  h+='<details'+(ui.aiResult?' open':'')+'><summary class="muted" style="cursor:pointer">手で貼り付ける</summary><div class="field" style="margin-top:8px"><textarea id="aiResult" data-bind="aiResult" rows="4" aria-label="AIのまとめ" placeholder="ここを長押しして「ペースト」">'+esc(ui.aiResult)+'</textarea><div class="row"><button type="button" class="btn" data-act="saveNote"'+(canSaveResult()?'':' disabled')+' id="saveNoteBtn">まとめを保存</button></div></div></details>';
   if(notes.length){
-    h+='<h3>保存したまとめ</h3>';
+    h+='<h3 id="notesHead">保存したまとめ</h3>';
     notes.forEach(function(n){h+='<div class="stack" style="gap:6px"><div class="row" style="justify-content:space-between"><span class="muted">'+fmtYMD(n.createdAt)+' '+fmtTime(n.createdAt)+'</span><button type="button" class="btn small danger" data-act="delNote" data-id="'+n.id+'">消す</button></div><div class="ai-out">'+formatNote(n.text)+'</div></div>';});
   }
   return h+'</div>';
@@ -787,18 +787,23 @@ var A={
     return true;
   },
   pasteResult:function(){
-    function manual(){var el=document.getElementById('aiResult');if(el)el.focus();toast('欄を長押しして「ペースト」してください');}
+    /* 読み取りと保存を1回の操作で済ませる。読めないときだけ手で貼り付ける欄を開く */
+    function manual(){
+      var d=document.querySelector('#aiResult');if(d){d.closest('details').open=true;d.focus();}
+      toast('欄を長押しして「ペースト」してください');
+    }
     if(!(navigator.clipboard&&navigator.clipboard.readText)){manual();return;}
     navigator.clipboard.readText().then(function(t){
       if(!t||!t.trim()){toast('クリップボードが空です');return;}
-      setResult(t);var el=document.getElementById('aiResult');if(el)el.value=ui.aiResult;
-      toast(isPrompt(t)?'AIに渡した文章が入っていました':'貼り付けました。「まとめを保存」を押してください');
+      if(isPrompt(t)){setResult(t);toast('AIに渡した文章が入っていました');return;}
+      ui.aiResult=t;A.saveNote();
     },manual);
   },
   saveNote:function(){
     var t=ui.aiResult.trim();if(!t||isPrompt(t))return;
     state.notes=state.notes||[];state.notes.push({id:uid(),childId:ui.reviewChild,createdAt:Date.now(),text:t});
     ui.aiResult='';save();render();toast('まとめを保存しました');
+    var h=document.getElementById('notesHead');if(h)h.scrollIntoView({block:'start',behavior:'smooth'});
   },
   delNote:function(b){ask('このまとめを消します。','消す',function(){state.notes=state.notes.filter(function(n){return n.id!==b.dataset.id;});save();render();},true);},
   addChild:function(){
