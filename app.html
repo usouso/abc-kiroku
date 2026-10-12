@@ -24,8 +24,6 @@
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
-/* ホーム画面アプリで、スクロールした内容が時刻・電池の表示に重ならないよう上端を覆う */
-body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
 .update-bar{position:fixed;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:25;max-width:608px;margin:0 auto;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:10px 12px 10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:600;box-shadow:var(--shadow)}
 .update-bar button{min-height:40px;padding:0 14px;border-radius:10px;border:0;background:var(--surface);color:var(--ink);font-weight:700}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -673,15 +671,9 @@ function renderSettings(){
   h+='<li>iPhoneでは、Safariの共有ボタンから<b>「ホーム画面に追加」</b>して、そのアイコンから開いてください。Safariのタブだけで使うと、しばらく開かないうちに記録が消えることがあります。</li>';
   h+='<li>プライベートブラウズ(シークレットモード)では、閉じると記録が消えます。</li>';
   h+='<li>「行動の理由の候補」は目安です。行動の理由を決めるものではありません。</li>';
-  h+='<li>バージョン:'+APP_VERSION+'<span class="muted">(上端 '+safeTop()+')</span></li></ul>';
+  h+='<li>バージョン:'+APP_VERSION+'</li></ul>';
   h+='<div class="row">'+(hasSample()?'':'<button type="button" class="btn" data-act="loadSample">見本データを入れる</button>')+'<button type="button" class="btn danger" data-act="clearAll">すべての記録を消す</button></div></div>';
   return h+'</div>';
-}
-
-/* 時刻・電池表示の高さ(不具合調査用に設定画面へ出す) */
-function safeTop(){
-  var p=document.createElement('div');p.style.cssText='position:fixed;top:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden';
-  document.body.appendChild(p);var v=Math.round(p.getBoundingClientRect().height);p.remove();return v;
 }
 
 /* ---------- actions ---------- */
