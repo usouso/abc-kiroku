@@ -11,8 +11,9 @@ const src = fs.readFileSync(path.join(root, 'app.html'), 'utf8');
 const title = (src.match(/<title>[\s\S]*?<\/title>/) || [''])[0];
 const style = (src.match(/<style>[\s\S]*?<\/style>/) || [''])[0];
 const fontLink = (src.match(/<link rel="stylesheet"[^>]*>/) || [''])[0];
-const body = src.replace(title, '').replace(style, '').replace(fontLink, '').trim();
 const VERSION = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+const body = src.replace(title, '').replace(style, '').replace(fontLink, '')
+  .replace("var APP_VERSION='プレビュー版';", `var APP_VERSION='${VERSION}';`).trim();
 
 const html = `<!doctype html>
 <html lang="ja">
@@ -62,13 +63,21 @@ fs.writeFileSync(path.join(out, 'manifest.webmanifest'), JSON.stringify({
   ]
 }, null, 2));
 
-// 自分のファイルはキャッシュ優先+裏で更新。オフラインでも開ける
+// ページ本体はネット優先(つながれば最新版、3秒で応答がなければキャッシュ)。それ以外はキャッシュ優先+裏で更新
 fs.writeFileSync(path.join(out, 'sw.js'), `const CACHE='abc-kiroku-${VERSION}';
 const FILES=['./','index.html','manifest.webmanifest','icon-180.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
+  if(e.request.mode==='navigate'){
+    e.respondWith(caches.open(CACHE).then(c=>{
+      const net=fetch(e.request,{cache:'no-store'}).then(res=>{if(res&&res.ok)c.put('./',res.clone());return res;});
+      const late=new Promise(r=>setTimeout(r,3000)).then(()=>c.match('./'));
+      return Promise.race([net,late]).then(r=>r||net).catch(()=>c.match('./'));
+    }));
+    return;
+  }
   e.respondWith(caches.open(CACHE).then(c=>c.match(e.request,{ignoreSearch:true}).then(hit=>{
     const net=fetch(e.request).then(res=>{if(res&&(res.ok||res.type==='opaque'))c.put(e.request,res.clone());return res;}).catch(()=>hit);
     return hit||net;

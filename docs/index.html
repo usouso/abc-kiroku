@@ -204,6 +204,7 @@ details.card[open] summary::after{content:"−"}
 'use strict';
 var KEY='abc-kiroku-v1';
 var SHORTCUT_NAME='ABC記録まとめ';
+var APP_VERSION='202610120605';
 var FN={
   demand:{label:'要求',desc:'ほしい物・したいことがある'},
   escape:{label:'逃避',desc:'いやなことを避けたい・終わらせたい'},
@@ -550,15 +551,29 @@ function setResult(t){
   var w=document.getElementById('aiWarn');if(w)w.hidden=!isPrompt(t);
 }
 /* ショートカットから戻ってきたら、貼り付け欄へ案内する */
-var awaitingShortcut=false;
-document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState!=='visible'||!awaitingShortcut)return;
-  awaitingShortcut=false;
-  var f=document.getElementById('aiResultField');if(!f)return;
-  f.scrollIntoView({block:'center'});
-  f.classList.add('flash');setTimeout(function(){f.classList.remove('flash');},2400);
-  toast('まとめができたら「貼り付け」を押してください');
-});
+/* iPhone はショートカットに切り替わっている間にアプリを閉じて開き直すことがあるので、待ち状態は端末に保存しておく */
+var AWAIT_KEY='abc-kiroku-await';
+function setAwaiting(){try{localStorage.setItem(AWAIT_KEY,JSON.stringify({at:Date.now(),childId:ui.reviewChild,period:ui.period}));}catch(e){}}
+function takeAwaiting(){
+  var a=null;
+  try{a=JSON.parse(localStorage.getItem(AWAIT_KEY)||'null');localStorage.removeItem(AWAIT_KEY);}catch(e){}
+  return a&&Date.now()-a.at<30*60000?a:null;
+}
+function resumeFromShortcut(){
+  if(document.visibilityState!=='visible')return;
+  var a=takeAwaiting();if(!a)return;
+  ui.tab='review';if(kid(a.childId))ui.reviewChild=a.childId;if(a.period!=null)ui.period=a.period;
+  render();
+  setTimeout(function(){
+    var f=document.getElementById('aiResultField');if(!f)return;
+    f.scrollIntoView({block:'center'});
+    f.classList.add('flash');setTimeout(function(){f.classList.remove('flash');},2400);
+    toast('まとめができたら「貼り付け」を押してください');
+  },120);
+}
+document.addEventListener('visibilitychange',resumeFromShortcut);
+window.addEventListener('pageshow',resumeFromShortcut);
+window.addEventListener('focus',resumeFromShortcut);
 function renderAI(recs){
   ui.aiText=buildAIText(recs);
   var k=kid(ui.reviewChild);
@@ -630,7 +645,8 @@ function renderSettings(){
   h+='<li>記録はこの端末の中だけに保存され、どこにも送られません。</li>';
   h+='<li>iPhoneでは、Safariの共有ボタンから<b>「ホーム画面に追加」</b>して、そのアイコンから開いてください。Safariのタブだけで使うと、しばらく開かないうちに記録が消えることがあります。</li>';
   h+='<li>プライベートブラウズ(シークレットモード)では、閉じると記録が消えます。</li>';
-  h+='<li>「行動の理由の候補」は目安です。行動の理由を決めるものではありません。</li></ul>';
+  h+='<li>「行動の理由の候補」は目安です。行動の理由を決めるものではありません。</li>';
+  h+='<li>バージョン:'+APP_VERSION+'</li></ul>';
   h+='<div class="row">'+(hasSample()?'':'<button type="button" class="btn" data-act="loadSample">見本データを入れる</button>')+'<button type="button" class="btn danger" data-act="clearAll">すべての記録を消す</button></div></div>';
   return h+'</div>';
 }
@@ -734,7 +750,7 @@ var A={
   shortcutAI:function(){
     /* ショートカット側で「クリップボードを取得」するので、先にコピーしてから開く */
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(ui.aiText).catch(function(){});
-    awaitingShortcut=true;
+    setAwaiting();
     return true;
   },
   pasteResult:function(){
@@ -835,6 +851,7 @@ document.addEventListener('keydown',function(e){
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
 var h0=(location.hash||'').slice(1);if(h0==='review'||h0==='settings')ui.tab=h0;
 render();
+resumeFromShortcut();
 })();
 </script>
 <script>
