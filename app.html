@@ -147,7 +147,14 @@ details.card[open] summary::after{content:"−"}
 .steps code{font-family:inherit;background:var(--chip);padding:1px 6px;border-radius:6px;font-weight:600}
 .note.warn{color:var(--danger);font-weight:600}
 .field.flash textarea{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);transition:box-shadow .3s}
-.ai-out{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.ai-out{overflow-wrap:anywhere;font-size:14.5px;line-height:1.7;background:var(--bg);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.ai-out h4{margin:8px 0 0;font-size:14px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px}
+.ai-out h4:first-child{margin-top:0}
+.ai-out h4::before{content:"";width:4px;height:1em;border-radius:2px;background:var(--accent)}
+.ai-out p{margin:0}
+.ai-out ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.ai-out li{position:relative;padding-left:1.1em}
+.ai-out li::before{content:"・";position:absolute;left:0;color:var(--muted)}
 
 /* settings */
 .set-row{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center}
@@ -517,14 +524,50 @@ function buildAIText(recs){
     if(memos.length){L.push('');L.push('■ 支援者のメモ(抜粋)');memos.forEach(function(r){L.push('- '+fmtDate(r.ts)+' '+TYPES[r.type]+'「'+r.behavior+'」:'+anonymize(r.memo).replace(/\s+/g,' '));});}
   }
   L.push('');
-  L.push('お願い:発達支援の支援者向けに、次の5点をやさしい日本語で簡潔にまとめてください。');
-  L.push('1. 全体の傾向(3行以内)');
-  L.push('2. 困った行動が起きやすい場面・条件');
-  L.push('3. 考えられる行動の理由(仮説として書き、断定しない)');
-  L.push('4. うまくいっていること');
-  L.push('5. 次に試せる支援のアイデア(具体的に3つ)');
-  L.push('診断名や医学的な判断は書かないでください。');
+  L.push('お願い:発達支援の支援者向けに、上の記録をやさしい日本語で簡潔にまとめてください。');
+  L.push('次の5つの見出しを、この形のまま使ってください。');
+  L.push('【全体の傾向】');
+  L.push('【起きやすい場面】');
+  L.push('【考えられる理由】');
+  L.push('【うまくいっていること】');
+  L.push('【次に試せる支援】');
+  L.push('書き方のきまり:');
+  L.push('・各見出しの下は「・」で始まる短い文を2〜3個にする(【次に試せる支援】は具体的に3個)。');
+  L.push('・理由は「〜かもしれません」と仮説として書き、断定しない。');
+  L.push('・記録に書かれていないこと(昼寝、家庭の様子、体調など)は推測しない。');
+  L.push('・字下げ、空行、記号(#、*)は使わない。');
+  L.push('・診断名や医学的な判断は書かない。');
   return L.join('\n');
+}
+/* AIの返事は書式がばらばら(字下げ・空行・#・**・番号)なので、見出し/箇条書き/文に整えて表示する */
+function formatNote(text){
+  var lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+  var out=[],list=[];
+  function flush(){if(list.length){out.push('<ul>'+list.join('')+'</ul>');list=[];}}
+  var KNOWN=/^(全体の傾向|(困った行動が)?起きやすい場面|考えられる(行動の)?理由|うまくいっていること|次に試せる支援)/;
+  function nextIndented(i){for(var j=i+1;j<lines.length;j++){if(lines[j].trim())return /^[\t 　]/.test(lines[j]);}return false;}
+  lines.forEach(function(raw,i){
+    var s=raw.replace(/[\t　]/g,' ').trim();
+    if(!s)return;
+    var m, isHead=KNOWN.test(s.replace(/^[#*\d.．、)）\s【]+/,''));
+    if((m=s.match(/^#{1,6}\s*(.+)$/)))      {s=m[1];isHead=true;}
+    else if((m=s.match(/^【(.+?)】\s*[:：]?$/))){s=m[1];isHead=true;}
+    else if((m=s.match(/^\*\*(.+?)\*\*\s*[:：]?$/))){s=m[1];isHead=true;}
+    else if((m=s.match(/^\d+\s*[.．、)）]\s*(.+)$/))&&m[1].length<=24&&!/[。．]$/.test(m[1])){s=m[1];isHead=true;}
+    else if(s.length<=20&&/[:：]$/.test(s)){s=s.replace(/[:：]$/,'');isHead=true;}
+    s=s.replace(/\*\*(.+?)\*\*/g,'$1').replace(/__(.+?)__/g,'$1');
+    if(isHead){
+      s=s.replace(/^\d+\s*[.．、)）]\s*/,'').replace(/^【|】\s*[:：]?$/g,'').replace(/\s*[(（][^)）]*[)）]\s*[:：]?$/,'').replace(/[:：]$/,'');
+      flush();out.push('<h4>'+esc(s)+'</h4>');return;
+    }
+    if((m=s.match(/^(?:[-*•・●○◦]|\d+\s*[.．)）])\s*(.+)$/))){list.push('<li>'+esc(m[1])+'</li>');return;}
+    flush();
+    /* 「昼寝の時間を調整する」→ 字下げした説明、のような小見出しは太字にする */
+    if(s.length<=30&&!/[。．!！?？]$/.test(s)&&nextIndented(i))out.push('<p><b>'+esc(s)+'</b></p>');
+    else out.push('<p>'+esc(s)+'</p>');
+  });
+  flush();
+  return out.join('');
 }
 var PROMPT_HEAD='以下は、発達支援の現場でつけた行動記録';
 function isPrompt(t){return String(t||'').trim().indexOf(PROMPT_HEAD)===0;}
@@ -583,7 +626,7 @@ function renderAI(recs){
   h+='<div class="row"><button type="button" class="btn primary" data-act="pasteResult">貼り付け</button><button type="button" class="btn" data-act="saveNote"'+(canSaveResult()?'':' disabled')+' id="saveNoteBtn">まとめを保存</button></div>';
   if(notes.length){
     h+='<h3>保存したまとめ</h3>';
-    notes.forEach(function(n){h+='<div class="stack" style="gap:6px"><div class="row" style="justify-content:space-between"><span class="muted">'+fmtYMD(n.createdAt)+' '+fmtTime(n.createdAt)+'</span><button type="button" class="btn small danger" data-act="delNote" data-id="'+n.id+'">消す</button></div><div class="ai-out">'+esc(n.text)+'</div></div>';});
+    notes.forEach(function(n){h+='<div class="stack" style="gap:6px"><div class="row" style="justify-content:space-between"><span class="muted">'+fmtYMD(n.createdAt)+' '+fmtTime(n.createdAt)+'</span><button type="button" class="btn small danger" data-act="delNote" data-id="'+n.id+'">消す</button></div><div class="ai-out">'+formatNote(n.text)+'</div></div>';});
   }
   return h+'</div>';
 }
@@ -630,9 +673,15 @@ function renderSettings(){
   h+='<li>iPhoneでは、Safariの共有ボタンから<b>「ホーム画面に追加」</b>して、そのアイコンから開いてください。Safariのタブだけで使うと、しばらく開かないうちに記録が消えることがあります。</li>';
   h+='<li>プライベートブラウズ(シークレットモード)では、閉じると記録が消えます。</li>';
   h+='<li>「行動の理由の候補」は目安です。行動の理由を決めるものではありません。</li>';
-  h+='<li>バージョン:'+APP_VERSION+'</li></ul>';
+  h+='<li>バージョン:'+APP_VERSION+'<span class="muted">(上端 '+safeTop()+')</span></li></ul>';
   h+='<div class="row">'+(hasSample()?'':'<button type="button" class="btn" data-act="loadSample">見本データを入れる</button>')+'<button type="button" class="btn danger" data-act="clearAll">すべての記録を消す</button></div></div>';
   return h+'</div>';
+}
+
+/* 時刻・電池表示の高さ(不具合調査用に設定画面へ出す) */
+function safeTop(){
+  var p=document.createElement('div');p.style.cssText='position:fixed;top:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden';
+  document.body.appendChild(p);var v=Math.round(p.getBoundingClientRect().height);p.remove();return v;
 }
 
 /* ---------- actions ---------- */
